@@ -7,13 +7,40 @@
 
 import SwiftUI
 
+struct BasketballPlayer: Identifiable {
+    let id = UUID()
+    var number: Int
+    var fouls: Int
+}
+
+struct BasketballTeam {
+    var name: String
+    var color: Color
+    var score: Int = 0
+    var fouls: Int = 0
+    var players: [BasketballPlayer] = []
+    
+    var displayScore: String {
+        "\(score < 10 ? "0" : "")\(score)"
+//        "\(score)"
+    }
+}
+
 struct BasketballBoard: View {
     private let borderWidth: CGFloat = 5
+    
+    @State var timerSeconds: TimeInterval = 0.0
+    
+    @State var team1 = BasketballTeam(name: "HOME", color: .red)
+    @State var team2 = BasketballTeam(name: "GUEST", color: .blue)
+    @State var period: Int = 1
+    
+    @State var foulPlayer: BasketballPlayer? = nil
     
     var body: some View {
         VStack {
             ZStack {
-                Text("06:27")
+                Text("\(displayTimer)")
                     .foregroundStyle(.orange)
                     .font(digitsFont())
                     .padding(32)
@@ -21,35 +48,38 @@ struct BasketballBoard: View {
             }
             .padding(.bottom, -48)
             
-            HStack {
-                VStack {
-                    Text("HOME")
-                        .font(titleFont())
-                    Text("46")
-                        .font(digitsFont())
-                        .foregroundStyle(.red)
+            ZStack {
+                HStack {
+                    VStack {
+                        Text(" \(team1.name) ")
+                            .font(titleFont())
+                            .background(in: Rectangle())
+                            .backgroundStyle(team1.color)
+                        Text("\(team1.displayScore)")
+                            .font(digitsFont())
+                            .foregroundStyle(.red)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack {
+                        Text(" \(team2.name) ")
+                            .font(titleFont())
+                            .background(in: Rectangle())
+                            .backgroundStyle(team2.color)
+                        Text("\(team2.displayScore)")
+                            .font(digitsFont())
+                            .foregroundStyle(.red)
+                    }
                 }
-                
-                Spacer()
-                
                 VStack {
                     Text("PERIOD")
                         .font(smallTitleFont)
-                    Text("3")
+                    Text("\(period)")
                         .font(digitsFont())
                         .foregroundStyle(.orange)
                 }
                 .offset(y: 32)
-                
-                Spacer()
-                
-                VStack {
-                    Text("GUEST")
-                        .font(titleFont())
-                    Text("23")
-                        .font(digitsFont())
-                        .foregroundStyle(.red)
-                }
             }
             .padding(.horizontal, 48)
 
@@ -64,7 +94,7 @@ struct BasketballBoard: View {
                 VStack {
                     Text("FOULS")
                         .font(smallTitleFont)
-                    Text("3")
+                    Text("\(team1.fouls)")
                         .font(digitsFont())
                         .foregroundStyle(.orange)
                     Text("WON")
@@ -76,7 +106,7 @@ struct BasketballBoard: View {
                 VStack {
                     Text("PLAYER")
                         .font(smallTitleFont)
-                    Text("55-1")
+                    Text("\(displayPlayerFoul)")
                         .font(digitsFont())
                         .foregroundStyle(.red)
                     Text("GAME")
@@ -88,7 +118,7 @@ struct BasketballBoard: View {
                 VStack {
                     Text("FOULS")
                         .font(smallTitleFont)
-                    Text("2")
+                    Text("\(team2.fouls)")
                         .font(digitsFont())
                         .foregroundStyle(.orange)
                     Text("WON")
@@ -102,6 +132,8 @@ struct BasketballBoard: View {
         .border(.white, width: borderWidth)
     }
     
+    // MARK: - Fonts
+    
     func digitsFont(size: CGFloat = 96) -> Font {
         .custom("DSEG7 Classic", size: size).weight(.bold)
     }
@@ -112,6 +144,28 @@ struct BasketballBoard: View {
     
     var smallTitleFont: Font {
         titleFont(size: 60)
+    }
+    
+    // MARK: - Computed state
+    
+    var players: [BasketballPlayer] {
+        team1.players + team2.players
+    }
+    
+    // MARK: - Display state
+    
+    var displayTimer: String {
+        let minutes = Int(timerSeconds) / 60
+        let seconds = Int(timerSeconds) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    var displayPlayerFoul: String {
+        if let foulPlayer {
+            "\(foulPlayer.number)  :  \(foulPlayer.fouls)"
+        } else {
+            "00  :  0"
+        }
     }
 }
 
