@@ -94,9 +94,9 @@ struct BasketballBoard: View {
             
             ZStack {
                 HStack {
-                    BasketballTeamView(team: team1, editingTeam: $editingTeam)
+                    BasketballTeamView(team: team1)
                     Spacer()
-                    BasketballTeamView(team: team2, editingTeam: $editingTeam)
+                    BasketballTeamView(team: team2)
                 }
                 VStack {
                     Text("PERIOD")
@@ -124,7 +124,7 @@ struct BasketballBoard: View {
                                 .onLongPressGesture(perform: addPlayer)
                                 .onTapGesture(perform: closeTeamSheet)
                         }
-                        LazyVGrid(columns: Array(repeating: .init(), count: 4), spacing: 24) {
+                        LazyVGrid(columns: Array(repeating: .init(), count: 4), spacing: 20) {
                             ForEach(editingTeam.players) { player in
                                 Text("\(player.number)")
                                     .font(titleFont(size: 48))
@@ -150,7 +150,7 @@ struct BasketballBoard: View {
                     }
                     Button("Cancel", role: .cancel) {}
                 } message: { _ in
-                    Text("Please enter player numbers, separated by a space.")
+                    Text("Please enter player numbers, separated by a comma.")
                 }
             } else {
                 HStack {
@@ -211,6 +211,8 @@ struct BasketballBoard: View {
         .statusBarHidden()
         .ignoresSafeArea()
         .persistentSystemOverlays(.hidden)
+        .defersSystemGestures(on: .bottom)
+        .defersSystemGestures(on: .top)
         .alert("Delete player", isPresented: $isDeletingPlayer, presenting: deletingPlayer) { player in
             Button("Delete", role: .destructive) {
                 doDeletePlayer(player)
@@ -326,7 +328,7 @@ struct BasketballBoard: View {
     
     func doAddPlayer() {
         if let editingTeam {
-            let playerNumberStrings = addingPlayerNumbers.split(separator: " ").map(String.init)
+            let playerNumberStrings = addingPlayerNumbers.split(separator: ",").map(String.init)
             let playerNumbers = playerNumberStrings.compactMap(Int.init)
             let players = playerNumbers.map(BasketballPlayer.init)
             editingTeam.players.append(contentsOf: players)
@@ -369,7 +371,6 @@ struct BasketballBoard: View {
 
 struct BasketballTeamView: View {
     @Bindable var team: BasketballTeam
-    @Binding var editingTeam: BasketballTeam?
     
     @State private var isScoreMenuPresented = false
     @State private var isPopupPresented = false
@@ -377,6 +378,7 @@ struct BasketballTeamView: View {
     var body: some View {
         VStack {
             teamNameView(for: team)
+                .padding(.bottom, 8)
                 .onLongPressGesture(perform: openTeamPopup)
                 .popover(isPresented: $isPopupPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
                     Grid {
@@ -407,7 +409,7 @@ struct BasketballTeamView: View {
                 .onTapGesture(perform: incrementScore)
                 .onLongPressGesture(perform: openScoreMenu)
                 .popover(isPresented: $isScoreMenuPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                    Stepper("Score", value: $team.score)
+                    Stepper("Score", value: $team.score, in: 0...Int.max)
                         .labelsHidden()
                         .padding()
                 }
