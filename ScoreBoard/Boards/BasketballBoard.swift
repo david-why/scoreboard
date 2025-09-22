@@ -81,7 +81,8 @@ struct BasketballBoard: View {
     
     @State var editingTeam: BasketballTeam? = nil
     @State var isAddingPlayer = false
-    @State var addingPlayerNumber = 0
+    @State var addingPlayerNumbers = ""
+    @State var isDeletingPlayer = false
     @State var deletingPlayer: BasketballPlayer? = nil
     
     var body: some View {
@@ -114,30 +115,14 @@ struct BasketballBoard: View {
                 .padding(.top, 48)
             
             Spacer()
-                .onAppear {
-                    team1.players.append(.init(number: 2))
-                    team1.players.append(.init(number: 3))
-                    team1.players.append(.init(number: 4))
-                    team1.players.append(.init(number: 5))
-                    team1.players.append(.init(number: 6))
-                    team1.players.append(.init(number: 8))
-                    team1.players.append(.init(number: 9))
-                    team1.players.append(.init(number: 12))
-                    team1.players.append(.init(number: 31))
-                    team1.players.append(.init(number: 41))
-                    team1.players.append(.init(number: 51))
-                    team1.players.append(.init(number: 61))
-                    team1.players.append(.init(number: 81))
-                    team1.players.append(.init(number: 91))
-                    self.editingTeam = team1
-                }
             
             if let editingTeam {
-                VStack(alignment: .leading) {
+                VStack {
                     HStack {
                         VStack {
                             teamNameView(for: editingTeam)
-                                .onTapGesture(perform: addPlayer)
+                                .onLongPressGesture(perform: addPlayer)
+                                .onTapGesture(perform: closeTeamSheet)
                         }
                         LazyVGrid(columns: Array(repeating: .init(), count: 4), spacing: 24) {
                             ForEach(editingTeam.players) { player in
@@ -151,15 +136,21 @@ struct BasketballBoard: View {
                                     }
                             }
                         }
+                        if editingTeam.players.isEmpty {
+                            Text("NO PLAYERS")
+                                .font(titleFont(size: 48))
+                        }
                     }
                 }
                 .padding(.horizontal, 48)
                 .alert("Add player", isPresented: $isAddingPlayer, presenting: editingTeam) { team in
-                    TextField("Player number", value: $addingPlayerNumber, format: .number)
+                    TextField("Player numbers", text: $addingPlayerNumbers)
                     Button("Add") {
                         doAddPlayer()
                     }
                     Button("Cancel", role: .cancel) {}
+                } message: { _ in
+                    Text("Please enter player numbers, separated by a space.")
                 }
             } else {
                 HStack {
@@ -169,6 +160,9 @@ struct BasketballBoard: View {
                         Text("\(team1.fouls)")
                             .font(digitsFont())
                             .foregroundStyle(.orange)
+                            .onTapGesture {
+                                openTeamSheet(team1)
+                            }
                         Text("WON")
                             .font(smallTitleFont)
                     }
@@ -181,6 +175,7 @@ struct BasketballBoard: View {
                         Text("\(displayPlayerFoul)")
                             .font(digitsFont())
                             .foregroundStyle(.red)
+                            .onLongPressGesture(perform: undoFoul)
                         Text("GAME")
                             .font(smallTitleFont)
                     }
@@ -193,6 +188,9 @@ struct BasketballBoard: View {
                         Text("\(team2.fouls)")
                             .font(digitsFont())
                             .foregroundStyle(.orange)
+                            .onTapGesture {
+                                openTeamSheet(team2)
+                            }
                         Text("WON")
                             .font(smallTitleFont)
                     }
@@ -213,6 +211,14 @@ struct BasketballBoard: View {
         .statusBarHidden()
         .ignoresSafeArea()
         .persistentSystemOverlays(.hidden)
+        .alert("Delete player", isPresented: $isDeletingPlayer, presenting: deletingPlayer) { player in
+            Button("Delete", role: .destructive) {
+                doDeletePlayer(player)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { player in
+            Text("Are you sure you want to delete player #\(player.number)? This cannot be undone.")
+        }
     }
     
     var timerView: some View {
@@ -295,6 +301,7 @@ struct BasketballBoard: View {
     
     func confirmNextPeriod() {
         period += 1
+        timerInterval = 0
     }
     
     func changeTimer() {
@@ -313,13 +320,16 @@ struct BasketballBoard: View {
     }
     
     func addPlayer() {
-        addingPlayerNumber = 0
+        addingPlayerNumbers = ""
         isAddingPlayer = true
     }
     
     func doAddPlayer() {
         if let editingTeam {
-            editingTeam.players.append(BasketballPlayer(number: addingPlayerNumber))
+            let playerNumberStrings = addingPlayerNumbers.split(separator: " ").map(String.init)
+            let playerNumbers = playerNumberStrings.compactMap(Int.init)
+            let players = playerNumbers.map(BasketballPlayer.init)
+            editingTeam.players.append(contentsOf: players)
         }
         isAddingPlayer = false
     }
@@ -332,6 +342,28 @@ struct BasketballBoard: View {
     
     func askDeletePlayer(_ player: BasketballPlayer) {
         deletingPlayer = player
+        isDeletingPlayer = true
+    }
+    
+    func closeTeamSheet() {
+        editingTeam = nil
+    }
+    
+    func openTeamSheet(_ team: BasketballTeam) {
+        editingTeam = team
+    }
+    
+    func doDeletePlayer(_ player: BasketballPlayer) {
+        if let editingTeam {
+            editingTeam.players.removeAll { $0 === player }
+        }
+    }
+    
+    func undoFoul() {
+        if let foulPlayer {
+            foulPlayer.fouls -= 1
+            self.foulPlayer = nil
+        }
     }
 }
 
@@ -339,35 +371,53 @@ struct BasketballTeamView: View {
     @Bindable var team: BasketballTeam
     @Binding var editingTeam: BasketballTeam?
     
-//    @State private var isSheetPresented = false
     @State private var isScoreMenuPresented = false
+    @State private var isPopupPresented = false
     
     var body: some View {
         VStack {
             teamNameView(for: team)
-                .onTapGesture(perform: closeTeamSheet)
-                .onLongPressGesture(perform: openTeamSheet)
+                .onLongPressGesture(perform: openTeamPopup)
+                .popover(isPresented: $isPopupPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                    Grid {
+                        GridRow {
+                            Text("Name")
+                                .frame(width: 100)
+                                .bold()
+                            TextField("Name", text: $team.name)
+                                .frame(width: 200)
+                        }
+                        GridRow {
+                            Text("Color")
+                                .frame(width: 100)
+                                .bold()
+                            HStack {
+                                ColorPicker("Color", selection: $team.color)
+                                    .labelsHidden()
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 40)
+                }
             Text("\(team.displayScore)")
                 .font(digitsFont())
                 .foregroundStyle(.red)
                 .onTapGesture(perform: incrementScore)
                 .onLongPressGesture(perform: openScoreMenu)
-        }
-        .popover(isPresented: $isScoreMenuPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-            Stepper("Score", value: $team.score)
-                .labelsHidden()
-                .padding()
+                .popover(isPresented: $isScoreMenuPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                    Stepper("Score", value: $team.score)
+                        .labelsHidden()
+                        .padding()
+                }
         }
     }
     
     // MARK: - UI actions
     
-    func openTeamSheet() {
-        editingTeam = team
-    }
-    
-    func closeTeamSheet() {
-        editingTeam = nil
+    func openTeamPopup() {
+        isPopupPresented = true
     }
     
     func incrementScore() {
