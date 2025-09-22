@@ -7,23 +7,57 @@
 
 import SwiftUI
 
-struct BasketballPlayer: Identifiable, Equatable {
+@Observable
+final class BasketballPlayer: Identifiable, Equatable {
     let id = UUID()
     var number: Int
-    var fouls: Int
+    var fouls: Int = 0
+    
+    init(number: Int) {
+        self.number = number
+    }
+    
+    static func == (lhs: BasketballPlayer, rhs: BasketballPlayer) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
-struct BasketballTeam: Identifiable, Equatable {
+@Observable
+final class BasketballTeam: Identifiable, Equatable {
     let id = UUID()
     var name: String
     var color: Color
     var score: Int = 0
-    var fouls: Int = 0
     var players: [BasketballPlayer] = []
+    
+    init(name: String, color: Color) {
+        self.name = name
+        self.color = color
+    }
+    
+    static func == (lhs: BasketballTeam, rhs: BasketballTeam) -> Bool {
+        lhs.id == rhs.id
+    }
     
     var displayScore: String {
         "\(score < 10 ? "0" : "")\(score)"
     }
+    
+    var fouls: Int {
+        players.map(\.fouls).reduce(0, +)
+    }
+}
+
+fileprivate func digitsFont(size: CGFloat = 96) -> Font {
+    .custom("DSEG7 Classic", size: size).weight(.bold)
+}
+
+fileprivate func titleFont(size: CGFloat = 72) -> Font {
+    .system(size: size, weight: .bold)
+}
+
+fileprivate var smallTitleFont: Font {
+    titleFont(size: 60)
 }
 
 struct BasketballBoard: View {
@@ -45,8 +79,10 @@ struct BasketballBoard: View {
     @State var isNextPeriodDialogShown = false
     @State var isChangingTimer = false
     
-    @State var changingScoreTeamID: BasketballTeam.ID? = nil
-    @State var showingTeam: BasketballTeam? = nil
+    @State var editingTeam: BasketballTeam? = nil
+    @State var isAddingPlayer = false
+    @State var addingPlayerNumber = 0
+    @State var deletingPlayer: BasketballPlayer? = nil
     
     var body: some View {
         VStack {
@@ -57,9 +93,9 @@ struct BasketballBoard: View {
             
             ZStack {
                 HStack {
-                    teamView(team1)
+                    BasketballTeamView(team: team1, editingTeam: $editingTeam)
                     Spacer()
-                    teamView(team2)
+                    BasketballTeamView(team: team2, editingTeam: $editingTeam)
                 }
                 VStack {
                     Text("PERIOD")
@@ -78,43 +114,91 @@ struct BasketballBoard: View {
                 .padding(.top, 48)
             
             Spacer()
+                .onAppear {
+                    team1.players.append(.init(number: 2))
+                    team1.players.append(.init(number: 3))
+                    team1.players.append(.init(number: 4))
+                    team1.players.append(.init(number: 5))
+                    team1.players.append(.init(number: 6))
+                    team1.players.append(.init(number: 8))
+                    team1.players.append(.init(number: 9))
+                    team1.players.append(.init(number: 12))
+                    team1.players.append(.init(number: 31))
+                    team1.players.append(.init(number: 41))
+                    team1.players.append(.init(number: 51))
+                    team1.players.append(.init(number: 61))
+                    team1.players.append(.init(number: 81))
+                    team1.players.append(.init(number: 91))
+                    self.editingTeam = team1
+                }
             
-            HStack {
-                VStack {
-                    Text("FOULS")
-                        .font(smallTitleFont)
-                    Text("\(team1.fouls)")
-                        .font(digitsFont())
-                        .foregroundStyle(.orange)
-                    Text("WON")
-                        .font(smallTitleFont)
+            if let editingTeam {
+                VStack(alignment: .leading) {
+                    HStack {
+                        VStack {
+                            teamNameView(for: editingTeam)
+                                .onTapGesture(perform: addPlayer)
+                        }
+                        LazyVGrid(columns: Array(repeating: .init(), count: 4), spacing: 24) {
+                            ForEach(editingTeam.players) { player in
+                                Text("\(player.number)")
+                                    .font(titleFont(size: 48))
+                                    .onTapGesture {
+                                        addFoul(player: player)
+                                    }
+                                    .onLongPressGesture {
+                                        askDeletePlayer(player)
+                                    }
+                            }
+                        }
+                    }
                 }
-                
-                Spacer()
-                
-                VStack {
-                    Text("PLAYER")
-                        .font(smallTitleFont)
-                    Text("\(displayPlayerFoul)")
-                        .font(digitsFont())
-                        .foregroundStyle(.red)
-                    Text("GAME")
-                        .font(smallTitleFont)
+                .padding(.horizontal, 48)
+                .alert("Add player", isPresented: $isAddingPlayer, presenting: editingTeam) { team in
+                    TextField("Player number", value: $addingPlayerNumber, format: .number)
+                    Button("Add") {
+                        doAddPlayer()
+                    }
+                    Button("Cancel", role: .cancel) {}
                 }
-                
-                Spacer()
-
-                VStack {
-                    Text("FOULS")
-                        .font(smallTitleFont)
-                    Text("\(team2.fouls)")
-                        .font(digitsFont())
-                        .foregroundStyle(.orange)
-                    Text("WON")
-                        .font(smallTitleFont)
+            } else {
+                HStack {
+                    VStack {
+                        Text("FOULS")
+                            .font(smallTitleFont)
+                        Text("\(team1.fouls)")
+                            .font(digitsFont())
+                            .foregroundStyle(.orange)
+                        Text("WON")
+                            .font(smallTitleFont)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack {
+                        Text("PLAYER")
+                            .font(smallTitleFont)
+                        Text("\(displayPlayerFoul)")
+                            .font(digitsFont())
+                            .foregroundStyle(.red)
+                        Text("GAME")
+                            .font(smallTitleFont)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack {
+                        Text("FOULS")
+                            .font(smallTitleFont)
+                        Text("\(team2.fouls)")
+                            .font(digitsFont())
+                            .foregroundStyle(.orange)
+                        Text("WON")
+                            .font(smallTitleFont)
+                    }
                 }
+                .padding(.horizontal, 48)
             }
-            .padding(.horizontal, 48)
             
             Spacer()
         }
@@ -126,6 +210,9 @@ struct BasketballBoard: View {
             Text("This will reset the timer.")
         }
         .onReceive(timer, perform: onTimerTick)
+        .statusBarHidden()
+        .ignoresSafeArea()
+        .persistentSystemOverlays(.hidden)
     }
     
     var timerView: some View {
@@ -162,47 +249,6 @@ struct BasketballBoard: View {
             .padding(.bottom, 10)
     }
     
-    @ViewBuilder func teamView(_ team: BasketballTeam) -> some View {
-        VStack {
-            Text(" \(team.name) ")
-                .font(titleFont())
-                .background(in: Rectangle())
-                .backgroundStyle(team.color)
-            Text("\(team.displayScore)")
-                .font(digitsFont())
-                .foregroundStyle(.red)
-                .onTapGesture {
-                    incrementTeamScore(team.id)
-                }
-                .onLongPressGesture {
-                    openTeamScoreMenu(team.id)
-                }
-                .popover(isPresented: isChangingTeamScoreBinding(team.id), attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                    changeTeamScorePopoverView(team.id)
-                }
-        }
-    }
-    
-    @ViewBuilder func changeTeamScorePopoverView(_ teamID: BasketballTeam.ID) -> some View {
-        Stepper("Score", value: teamScoreBinding(teamID))
-            .labelsHidden()
-            .padding()
-    }
-    
-    // MARK: - Fonts
-    
-    func digitsFont(size: CGFloat = 96) -> Font {
-        .custom("DSEG7 Classic", size: size).weight(.bold)
-    }
-    
-    func titleFont(size: CGFloat = 72) -> Font {
-        .system(size: size, weight: .bold)
-    }
-    
-    var smallTitleFont: Font {
-        titleFont(size: 60)
-    }
-    
     // MARK: - Computed state
     
     var players: [BasketballPlayer] {
@@ -211,26 +257,6 @@ struct BasketballBoard: View {
     
     var countdownInterval: TimeInterval {
         TimeInterval(countdownMinutes * 60 + countdownSeconds)
-    }
-    
-    func isChangingTeamScoreBinding(_ teamID: BasketballTeam.ID) -> Binding<Bool> {
-        Binding {
-            changingScoreTeamID == teamID
-        } set: {
-            changingScoreTeamID = $0 ? teamID : nil
-        }
-    }
-    
-    func teamScoreBinding(_ teamID: BasketballTeam.ID) -> Binding<Int> {
-        Binding {
-            teamID == team1.id ? team1.score : team2.score
-        } set: {
-            if teamID == team1.id {
-                team1.score = $0
-            } else {
-                team2.score = $0
-            }
-        }
     }
     
     // MARK: - Display state
@@ -286,17 +312,78 @@ struct BasketballBoard: View {
         timerInterval = 0
     }
     
-    func incrementTeamScore(_ teamID: BasketballTeam.ID) {
-        if teamID == team1.id {
-            team1.score += 1
-        } else if teamID == team2.id {
-            team2.score += 1
+    func addPlayer() {
+        addingPlayerNumber = 0
+        isAddingPlayer = true
+    }
+    
+    func doAddPlayer() {
+        if let editingTeam {
+            editingTeam.players.append(BasketballPlayer(number: addingPlayerNumber))
+        }
+        isAddingPlayer = false
+    }
+    
+    func addFoul(player: BasketballPlayer) {
+        player.fouls += 1
+        foulPlayer = player
+        editingTeam = nil
+    }
+    
+    func askDeletePlayer(_ player: BasketballPlayer) {
+        deletingPlayer = player
+    }
+}
+
+struct BasketballTeamView: View {
+    @Bindable var team: BasketballTeam
+    @Binding var editingTeam: BasketballTeam?
+    
+//    @State private var isSheetPresented = false
+    @State private var isScoreMenuPresented = false
+    
+    var body: some View {
+        VStack {
+            teamNameView(for: team)
+                .onTapGesture(perform: closeTeamSheet)
+                .onLongPressGesture(perform: openTeamSheet)
+            Text("\(team.displayScore)")
+                .font(digitsFont())
+                .foregroundStyle(.red)
+                .onTapGesture(perform: incrementScore)
+                .onLongPressGesture(perform: openScoreMenu)
+        }
+        .popover(isPresented: $isScoreMenuPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+            Stepper("Score", value: $team.score)
+                .labelsHidden()
+                .padding()
         }
     }
     
-    func openTeamScoreMenu(_ teamID: BasketballTeam.ID) {
-        changingScoreTeamID = teamID
+    // MARK: - UI actions
+    
+    func openTeamSheet() {
+        editingTeam = team
     }
+    
+    func closeTeamSheet() {
+        editingTeam = nil
+    }
+    
+    func incrementScore() {
+        team.score += 1
+    }
+    
+    func openScoreMenu() {
+        isScoreMenuPresented = true
+    }
+}
+
+@ViewBuilder fileprivate func teamNameView(for team: BasketballTeam, font: Font? = nil) -> some View {
+    Text(" \(team.name) ")
+        .font(font ?? titleFont())
+        .background(in: Rectangle())
+        .backgroundStyle(team.color)
 }
 
 #Preview {
