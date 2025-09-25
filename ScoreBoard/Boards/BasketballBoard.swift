@@ -48,17 +48,17 @@ final class BasketballTeam: Identifiable, Equatable {
     }
 }
 
-fileprivate func digitsFont(size: CGFloat = 96) -> Font {
-    .custom("DSEG7 Classic", size: size).weight(.bold)
+fileprivate func digitsFont(size: CGFloat = 1) -> Font {
+    return .custom("DSEG7 Classic", size: size * UIScreen.main.nativeBounds.width / 17).weight(.bold)
 }
 
-fileprivate func titleFont(size: CGFloat = 72) -> Font {
-    .system(size: size, weight: .bold)
+fileprivate let largeDigitsFont = digitsFont(size: 1.2)
+
+fileprivate func titleFont(size: CGFloat = 1) -> Font {
+    .system(size: size * UIScreen.main.nativeBounds.width / 27, weight: .bold)
 }
 
-fileprivate var smallTitleFont: Font {
-    titleFont(size: 60)
-}
+fileprivate let smallTitleFont = titleFont(size: 0.85)
 
 struct BasketballBoard: View {
     private let borderWidth: CGFloat = 5
@@ -87,10 +87,8 @@ struct BasketballBoard: View {
     
     var body: some View {
         VStack {
-            ZStack {
-                timerView
-            }
-            .padding(.bottom, -48)
+            timerView
+                .padding(.bottom, -48)
             
             ZStack {
                 HStack {
@@ -121,24 +119,27 @@ struct BasketballBoard: View {
                     HStack {
                         VStack {
                             teamNameView(for: editingTeam)
-                                .onLongPressGesture(perform: addPlayer)
                                 .onTapGesture(perform: closeTeamSheet)
+                                .onLongPressGesture(perform: addPlayer)
                         }
-                        LazyVGrid(columns: Array(repeating: .init(), count: 4), spacing: 20) {
-                            ForEach(editingTeam.players) { player in
-                                Text("\(player.number)")
-                                    .font(titleFont(size: 48))
-                                    .onTapGesture {
-                                        addFoul(player: player)
-                                    }
-                                    .onLongPressGesture {
-                                        askDeletePlayer(player)
-                                    }
+                        if !editingTeam.players.isEmpty {
+                            LazyVGrid(columns: Array(repeating: .init(), count: 5), spacing: 20) {
+                                ForEach(editingTeam.players) { player in
+                                    Text("\(player.number)")
+                                        .font(titleFont(size: 0.6))
+                                        .onTapGesture {
+                                            addFoul(player: player)
+                                        }
+                                        .onLongPressGesture {
+                                            askDeletePlayer(player)
+                                        }
+                                }
                             }
+                            .frame(maxWidth: 800)
                         }
                         if editingTeam.players.isEmpty {
                             Text("NO PLAYERS")
-                                .font(titleFont(size: 48))
+                                .font(titleFont(size: 0.6))
                         }
                     }
                 }
@@ -212,7 +213,7 @@ struct BasketballBoard: View {
         .ignoresSafeArea()
         .persistentSystemOverlays(.hidden)
         .defersSystemGestures(on: .bottom)
-        .defersSystemGestures(on: .top)
+        .preferredColorScheme(.dark)
         .alert("Delete player", isPresented: $isDeletingPlayer, presenting: deletingPlayer) { player in
             Button("Delete", role: .destructive) {
                 doDeletePlayer(player)
@@ -224,13 +225,26 @@ struct BasketballBoard: View {
     }
     
     var timerView: some View {
-        Text("\(displayTimer)")
+        Button("\(displayTimer)") {}
             .foregroundStyle(.orange)
-            .font(digitsFont())
+            .font(largeDigitsFont)
+            .contentShape(Rectangle())
             .padding(32)
             .border(.white, width: borderWidth)
-            .onLongPressGesture(perform: changeTimer)
-            .onTapGesture(perform: toggleTimer)
+            .simultaneousGesture(
+                LongPressGesture()
+                    .onEnded { _ in
+                        changeTimer()
+                    }
+            )
+            .highPriorityGesture(
+                TapGesture()
+                    .onEnded { _ in
+                        toggleTimer()
+                    }
+            )
+//            .onLongPressGesture(perform: changeTimer)
+//            .onTapGesture(perform: toggleTimer)
             .popover(isPresented: $isChangingTimer, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
                 timerPopoverView
             }
@@ -239,7 +253,7 @@ struct BasketballBoard: View {
     @ViewBuilder var timerPopoverView: some View {
         HStack {
             Picker("Minutes", selection: $countdownMinutes) {
-                ForEach(0...59, id: \.self) { i in
+                ForEach(0...60, id: \.self) { i in
                     Text("\(i)").tag(i)
                 }
             }
@@ -404,9 +418,11 @@ struct BasketballTeamView: View {
                     .padding(.vertical, 40)
                 }
             Text("\(team.displayScore)")
-                .font(digitsFont())
+                .font(largeDigitsFont)
                 .foregroundStyle(.red)
                 .onTapGesture(perform: incrementScore)
+                .onTapGesture(count: 2, perform: incrementScore2)
+                .onTapGesture(count: 3, perform: incrementScore3)
                 .onLongPressGesture(perform: openScoreMenu)
                 .popover(isPresented: $isScoreMenuPresented, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
                     Stepper("Score", value: $team.score, in: 0...Int.max)
@@ -426,6 +442,14 @@ struct BasketballTeamView: View {
         team.score += 1
     }
     
+    func incrementScore2() {
+        team.score += 2
+    }
+    
+    func incrementScore3() {
+        team.score += 3
+    }
+
     func openScoreMenu() {
         isScoreMenuPresented = true
     }
