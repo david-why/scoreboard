@@ -4,7 +4,7 @@
 
 ScoreBoard is a clean and sleek basketball scoreboard app. It is designed so that you can directly cast it from an iPad to a large TV screen at a basketball game.
 
-_[See a video demo](public/record.mov)_
+_[See a video demo](https://davidwhy.me/scoreboard)_
 
 ## Installation
 
